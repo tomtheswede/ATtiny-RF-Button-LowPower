@@ -19,10 +19,13 @@ bool sendByte[4];
 bool longPressPrimer=false;
 bool longerPressPrimer=false;
 bool longestPressPrimer=false;
+int highBits=0;
 
 void setup() {
   // put your setup code here, to run once:
   pinMode(sendPin,OUTPUT);
+  encodeMessage(1);
+  encodeMessage(1);
   encodeMessage(1);
   triggered=false;
   longPressPrimer=true;
@@ -34,13 +37,19 @@ void setup() {
 void loop() {
   if (longPressPrimer && millis()-lastTrigger>700) {
     encodeMessage(2);
+    encodeMessage(2);
+    encodeMessage(2);
     longPressPrimer=false;
   }
   else if (longerPressPrimer && millis()-lastTrigger>1900) {
     encodeMessage(3);
+    encodeMessage(3);
+    encodeMessage(3);
     longerPressPrimer=false;
   }
   else if (longestPressPrimer && millis()-lastTrigger>4000) {
+    encodeMessage(4);
+    encodeMessage(4);
     encodeMessage(4);
     longestPressPrimer=false;
   }
@@ -51,6 +60,7 @@ void encodeMessage(int msgType) { //message should read 15 1 6 14 or 1111 0001 0
   for (int i=0; i <= 6; i++){
     pulse(0);
   }
+  delay(1);
   
   encodeNumber(15); //Start  1111 to initiate message
   encodeNumber(channel); //number 4
@@ -60,16 +70,21 @@ void encodeMessage(int msgType) { //message should read 15 1 6 14 or 1111 0001 0
   encodeNumber(sensorName1); //number 9
   encodeNumber(11); //comma
   encodeNumber(msgType); //number 9
-  encodeNumber(13);//End  1101 - WIP on parity byte
-  encodeNumber(12);//End  1100 - WIP on parity byte
+  if (highBits%2) { //Equals 1/true if odd number of high bits
+    encodeNumber(13);//End  1101 - WIP on parity byte
+  }
+  else { //No partiy bit required
+    encodeNumber(12);//End  1100 - WIP on parity byte
+  }
+  delay(1);
 }
 
 void pulse(bool logic) {
   if (logic) {
     digitalWrite(sendPin,HIGH);
-    delayMicroseconds(575); 
+    delayMicroseconds(575); //665us realtime
     digitalWrite(sendPin,LOW);
-    delayMicroseconds(250);
+    delayMicroseconds(250); //360us realtime
   }
   else {
     digitalWrite(sendPin,HIGH);
@@ -84,6 +99,7 @@ void encodeNumber(int num) {
   for (int i=0; i<4; i++) {
     if(bitRead(num,3-i)) { //a one
       pulse(1);
+      highBits=highBits+1;
     }
     else{ //a zero
       pulse(0);
