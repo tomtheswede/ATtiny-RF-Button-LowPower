@@ -1,108 +1,118 @@
 /*  
- *   For sending RF signals from battery operated ATtiny85
+ *   For sending 433MHz RF signals from battery operated ATtiny85
  *   Code by Thomas Friberg (https://github.com/tomtheswede)
- *   Updated 23/10/2016
+ *   Updated 18/12/2016
  */
 
 //Device parameters
-const unsigned int channel = 1; //So the message can be picked up by the right receiver
-const unsigned int devType = 1; //Reads as "1" corresponding with BTN type
-const unsigned int sensorName1 = 5; //The number of this device - needs to be unique.
-
-//Interrupt variables
-volatile bool triggered=false;
+const unsigned long devID = 183339503; // 00001010111011011000100111101111 So the message can be picked up by the right receiver
+const unsigned long devType = 1; //Reads as "1" corresponding with BTN type
 
 //General variables
 const unsigned int sendPin = 2; //RF pin
+const boolean preamble[] = {0,0,0,0,1,1,1,1,1,1,0,0}; //252
+const boolean regPreamble[] = {0,0,0,0,1,1,1,1,1,1,0,1}; //253
 long lastTrigger;
-bool sendByte[4];
 bool longPressPrimer=false;
 bool longerPressPrimer=false;
 bool longestPressPrimer=false;
-int highBits=0;
 
 void setup() {
   // put your setup code here, to run once:
   pinMode(sendPin,OUTPUT);
-  encodeMessage(1);
-  encodeMessage(1);
-  encodeMessage(1);
-  triggered=false;
   longPressPrimer=true;
   longerPressPrimer=true;
   longestPressPrimer=true;
   lastTrigger=millis();
+  encodeMessage(1); //regular button push message
 }
 
 void loop() {
   if (longPressPrimer && millis()-lastTrigger>700) {
     encodeMessage(2);
-    encodeMessage(2);
-    encodeMessage(2);
     longPressPrimer=false;
   }
   else if (longerPressPrimer && millis()-lastTrigger>1900) {
     encodeMessage(3);
-    encodeMessage(3);
-    encodeMessage(3);
     longerPressPrimer=false;
   }
   else if (longestPressPrimer && millis()-lastTrigger>4000) {
-    encodeMessage(4);
-    encodeMessage(4);
-    encodeMessage(4);
+    sendRegisterMessage();
     longestPressPrimer=false;
   }
-}
-
-void encodeMessage(int msgType) { //message should read 15 1 6 14 or 1111 0001 0110 1110
-  //regular pulses for receiver to calibrate
-  for (int i=0; i <= 6; i++){
-    pulse(0);
-  }
-  delay(1);
-  
-  encodeNumber(15); //Start  1111 to initiate message
-  encodeNumber(channel); //number 4
-  encodeNumber(11); //comma
-  encodeNumber(devType); //number 9
-  encodeNumber(11); //comma
-  encodeNumber(sensorName1); //number 9
-  encodeNumber(11); //comma
-  encodeNumber(msgType); //number 9
-  if (highBits%2) { //Equals 1/true if odd number of high bits
-    encodeNumber(13);//End  1101 - WIP on parity byte
-  }
-  else { //No partiy bit required
-    encodeNumber(12);//End  1100 - WIP on parity byte
-  }
-  delay(1);
 }
 
 void pulse(bool logic) {
   if (logic) {
     digitalWrite(sendPin,HIGH);
-    delayMicroseconds(575); //665us realtime
+    delayMicroseconds(550); //665us realtime
     digitalWrite(sendPin,LOW);
-    delayMicroseconds(250); //360us realtime
+    delayMicroseconds(200); //360us realtime
   }
   else {
     digitalWrite(sendPin,HIGH);
-    delayMicroseconds(250);
+    delayMicroseconds(200);
     digitalWrite(sendPin,LOW);
-    delayMicroseconds(600);
+    delayMicroseconds(550);
   }
 }
 
-void encodeNumber(int num) {
-  
-  for (int i=0; i<4; i++) {
-    if(bitRead(num,3-i)) { //a one
-      pulse(1);
-      highBits=highBits+1;
+void sendRegisterMessage() {
+  for (int rep=0; rep<5; rep++) {
+    //preamble 8 bits with register message
+    for (int i=0; i<12; i++) {
+      pulse(regPreamble[i]);
     }
-    else{ //a zero
-      pulse(0);
+    //device ID
+    for (int i=0; i<32; i++) {
+      if(bitRead(devID,32-1-i)) { //a one
+         pulse(1);   //a one
+      }
+      else{ //a zero
+        pulse(0);  //a zero
+      }
     }
+    //Message - what device type it is
+    for (int i=0; i<32; i++) {
+      if(bitRead(devType,32-1-i)) {
+        pulse(1);   //a one
+      }
+      else{
+        pulse(0);  //a zero
+      }
+    }
+    pulse(0); //to end the message timing
+    delay(2);
   }
+  delay(3);
+}
+
+void encodeMessage(unsigned long msg) {
+  for (int rep=0; rep<5; rep++) {
+    //preamble 8 bits without register message
+    for (int i=0; i<12; i++) {
+      pulse(preamble[i]);
+    }
+    //device ID
+    for (int i=0; i<32; i++) {
+      if(bitRead(devID,32-1-i)) { //a one
+         pulse(1);   //a one
+      }
+      else{ //a zero
+        pulse(0);  //a zero
+      }
+    }
+    //Message - what device type it is
+    for (int i=0; i<32; i++) {
+      if(bitRead(msg,32-1-i)) {
+        pulse(1);   //a one
+      }
+      else{
+        pulse(0);  //a zero
+      }
+    }
+    pulse(0); //to end the message timing
+    delay(2);
+  }
+  delay(3);
 }
