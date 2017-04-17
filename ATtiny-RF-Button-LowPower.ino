@@ -21,35 +21,22 @@ byte msgBuffer[9]; //Max 9 bytes for transmission
 int msgLength;
 int k;
 
-void setup() {
-  // put your setup code here, to run once:
+void setup() { //This code runs as soon as the device is powered on.
   pinMode(sendPin,OUTPUT);
 
-  //pulse(1); //For calibration pre-read of reciever
-  //pulse(0); //For calibration pre-read of reciever
-  //delay(2);
-  //for (int rep=0; rep<5; rep++) {
-  //  for (int i=31; i>=0; i--) {
-  //    pulse(bitRead(devID,i));
-  //  }
-  //  pulse(0); //to end the message timing
-  //  delay(2);
-  //}
-  //delay(400);
-  encodeMessage(0,devID); //For registration study
-  //encodeMessage(1,0); //regular button push message
+  encodeMessage(1,0); //regular button push message
 }
 
 void loop() {
-  if (longPressPrimer && millis()-lastTrigger>1100) {
+  if (longPressPrimer && millis()-lastTrigger>600) {
     encodeMessage(1,1);
     longPressPrimer=false;
   }
-  else if (longerPressPrimer && millis()-lastTrigger>2500) {
-    encodeMessage(2,532);
+  else if (longerPressPrimer && millis()-lastTrigger>1500) {
+    encodeMessage(1,2);
     longerPressPrimer=false;
   }
-  else if (longestPressPrimer && millis()-lastTrigger>5000) {
+  else if (longestPressPrimer && millis()-lastTrigger>6000) {
     encodeMessage(0,devID);
     longestPressPrimer=false;
   }
@@ -98,5 +85,5 @@ void encodeMessage(byte msgType,unsigned long msg) {
     pulse(0); //to end the message timing
     delay(2);
   }
-  delay(3);
+  delay(2);
 }
