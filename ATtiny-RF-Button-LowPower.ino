@@ -1,7 +1,7 @@
 /*  
  *   For sending 433MHz RF signals from battery operated ATtiny85
  *   Code by Thomas Friberg (https://github.com/tomtheswede)
- *   Updated 18/12/2016
+ *   Updated 17/04/2017
  */
 
 //Device parameters
@@ -9,35 +9,48 @@ const unsigned long devID = 183339503; // 00001010111011011000100111101111 So th
 const unsigned long devType = 1; //Reads as "1" corresponding with BTN type
 
 //General variables
-const unsigned int sendPin = 2; //RF pin
-const boolean preamble[] = {0,0,0,0,1,1,1,1,1,1,0,0}; //252
-const boolean regPreamble[] = {0,0,0,0,1,1,1,1,1,1,0,1}; //253
-long lastTrigger;
-bool longPressPrimer=false;
-bool longerPressPrimer=false;
-bool longestPressPrimer=false;
+const byte sendPin = 7; //RF pin. pin 3 for rfbutton v0.4
+const byte typePreamble[4] = {120,121,122,123}; //01111000 for register, 01111001 for basic message type
+long lastTrigger=millis();
+bool longPressPrimer=true;
+bool longerPressPrimer=true;
+bool longestPressPrimer=true;
+byte msgType=1;
+byte msgLengths[4]={32,8,16,32};
+byte msgBuffer[9]; //Max 9 bytes for transmission
+int msgLength;
+int k;
 
 void setup() {
   // put your setup code here, to run once:
   pinMode(sendPin,OUTPUT);
-  longPressPrimer=true;
-  longerPressPrimer=true;
-  longestPressPrimer=true;
-  lastTrigger=millis();
-  encodeMessage(1); //regular button push message
+
+  //pulse(1); //For calibration pre-read of reciever
+  //pulse(0); //For calibration pre-read of reciever
+  //delay(2);
+  //for (int rep=0; rep<5; rep++) {
+  //  for (int i=31; i>=0; i--) {
+  //    pulse(bitRead(devID,i));
+  //  }
+  //  pulse(0); //to end the message timing
+  //  delay(2);
+  //}
+  //delay(400);
+  encodeMessage(0,devID); //For registration study
+  //encodeMessage(1,0); //regular button push message
 }
 
 void loop() {
-  if (longPressPrimer && millis()-lastTrigger>700) {
-    encodeMessage(2);
+  if (longPressPrimer && millis()-lastTrigger>1100) {
+    encodeMessage(1,1);
     longPressPrimer=false;
   }
-  else if (longerPressPrimer && millis()-lastTrigger>1900) {
-    encodeMessage(3);
+  else if (longerPressPrimer && millis()-lastTrigger>2500) {
+    encodeMessage(2,532);
     longerPressPrimer=false;
   }
-  else if (longestPressPrimer && millis()-lastTrigger>4000) {
-    sendRegisterMessage();
+  else if (longestPressPrimer && millis()-lastTrigger>5000) {
+    encodeMessage(0,devID);
     longestPressPrimer=false;
   }
 }
@@ -45,71 +58,42 @@ void loop() {
 void pulse(bool logic) {
   if (logic) {
     digitalWrite(sendPin,HIGH);
-    delayMicroseconds(550); //665us realtime
+    delayMicroseconds(720);  //797us realtime
     digitalWrite(sendPin,LOW);
-    delayMicroseconds(200); //360us realtime
+    delayMicroseconds(60);   //416us realtime
   }
   else {
     digitalWrite(sendPin,HIGH);
-    delayMicroseconds(200);
+    delayMicroseconds(320);  //416us realtime
     digitalWrite(sendPin,LOW);
-    delayMicroseconds(550);
+    delayMicroseconds(470);  //797us realtime
   }
 }
 
-void sendRegisterMessage() {
-  for (int rep=0; rep<5; rep++) {
-    //preamble 8 bits with register message
-    for (int i=0; i<12; i++) {
-      pulse(regPreamble[i]);
-    }
-    //device ID
-    for (int i=0; i<32; i++) {
-      if(bitRead(devID,32-1-i)) { //a one
-         pulse(1);   //a one
-      }
-      else{ //a zero
-        pulse(0);  //a zero
-      }
-    }
-    //Message - what device type it is
-    for (int i=0; i<32; i++) {
-      if(bitRead(devType,32-1-i)) {
-        pulse(1);   //a one
-      }
-      else{
-        pulse(0);  //a zero
-      }
-    }
-    pulse(0); //to end the message timing
-    delay(2);
+void encodeMessage(byte msgType,unsigned long msg) {
+  msgLength=msgLengths[msgType];
+  k=0;
+  //construct the message
+  for (int i=0; i<8; i++) {  //6 bit preamble with 2 bit msg type - 8 bit total
+    bitWrite(msgBuffer[k/8],7-(k%8),bitRead(typePreamble[msgType],7-i));
+    k++;
   }
-  delay(3);
-}
-
-void encodeMessage(unsigned long msg) {
+  for (int i=0; i<32; i++) {  //32 bit device ID
+    bitWrite(msgBuffer[k/8],7-(k%8),bitRead(devID,31-i));
+    k++;
+  }
+  for (int i=0; i<msgLength; i++) {  //72,48,56,72 bit message length
+    bitWrite(msgBuffer[k/8],7-(k%8),bitRead(msg,msgLength-1-i));
+    k++;
+  }
+  
+  //Send the message
+  pulse(1); //For calibration pre-read of reciever
+  pulse(0); //For calibration pre-read of reciever
+  delay(2);
   for (int rep=0; rep<5; rep++) {
-    //preamble 8 bits without register message
-    for (int i=0; i<12; i++) {
-      pulse(preamble[i]);
-    }
-    //device ID
-    for (int i=0; i<32; i++) {
-      if(bitRead(devID,32-1-i)) { //a one
-         pulse(1);   //a one
-      }
-      else{ //a zero
-        pulse(0);  //a zero
-      }
-    }
-    //Message - what device type it is
-    for (int i=0; i<32; i++) {
-      if(bitRead(msg,32-1-i)) {
-        pulse(1);   //a one
-      }
-      else{
-        pulse(0);  //a zero
-      }
+    for (int i=0; i<msgLength+40; i++) {
+      pulse(bitRead(msgBuffer[i/8],7-(i%8)));
     }
     pulse(0); //to end the message timing
     delay(2);
